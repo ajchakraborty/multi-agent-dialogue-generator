@@ -1,0 +1,343 @@
+{
+  "meta": {
+    "conversation_id": "ba_dc_001",
+    "domain_id": null,
+    "toolset_id": null,
+    "model": "gpt-5.1",
+    "prompt_versions": {
+      "system_agent": "v3",
+      "user_agent": "v1",
+      "tool_agent": "v1"
+    },
+    "seed": null,
+    "simulator_version": "0.1.0"
+  },
+  "config": {
+    "scenario_name": "ba_dc_001",
+    "task": {
+      "slots": {
+        "constraints": {
+          "target_account": "credit_card",
+          "merchant_query": "Best Buy",
+          "amount": 249.99,
+          "transaction_date": "November 2nd"
+        },
+        "preferences": {
+          "dispute_reason": "charged twice for same purchase"
+        }
+      },
+      "success_criteria": {
+        "target_selector": {
+          "merchant_query": "Best Buy",
+          "amount": 249.99,
+          "transaction_date": "2025-11-02"
+        },
+        "action": "submit_dispute",
+        "notes": "Success if the assistant submits a dispute via submit_dispute for the Best Buy transaction of $249.99 on November 2nd (after finding it via list_recent_transactions, accounting for the user's initial date uncertainty)."
+      },
+      "objective": "Dispute a fraudulent or incorrect charge"
+    },
+    "user_agent_config": {
+      "injected_behaviors": [
+        {
+          "type_id": "user.uncertain_date",
+          "instructions": "Initially state the transaction date as November 3rd. When the assistant reports no match for that date but finds a transaction on November 2nd, realize that was the correct date."
+        }
+      ]
+    },
+    "tool_agent_config": {
+      "injected_behaviors": [
+        {
+          "type_id": "tool.no_results_suggest_alternative",
+          "instructions": "When searching for transactions on November 3rd with merchant Best Buy, return no results but indicate there is a matching transaction on November 2nd."
+        }
+      ],
+      "context": {
+        "seed": {
+          "accounts": [
+            {
+              "account_id": "ACC-001",
+              "account_type": "credit_card",
+              "nickname": "Rewards Card",
+              "masked_number": "****4321",
+              "currency": "USD"
+            }
+          ],
+          "transactions": [
+            {
+              "transaction_id": "TXN-001",
+              "account_id": "ACC-001",
+              "posted_date": "2025-11-02",
+              "amount": -249.99,
+              "currency": "USD",
+              "description": "Best Buy",
+              "status": "posted"
+            },
+            {
+              "transaction_id": "TXN-004",
+              "account_id": "ACC-001",
+              "posted_date": "2025-11-02",
+              "amount": -249.99,
+              "currency": "USD",
+              "description": "Best Buy",
+              "status": "posted"
+            },
+            {
+              "transaction_id": "TXN-002",
+              "account_id": "ACC-001",
+              "posted_date": "2025-11-01",
+              "amount": -45.67,
+              "currency": "USD",
+              "description": "Starbucks",
+              "status": "posted"
+            },
+            {
+              "transaction_id": "TXN-003",
+              "account_id": "ACC-001",
+              "posted_date": "2025-10-30",
+              "amount": -89.23,
+              "currency": "USD",
+              "description": "Amazon",
+              "status": "posted"
+            }
+          ]
+        }
+      }
+    },
+    "persona": {
+      "id": "persona_003",
+      "name": "Nikola Petrovic",
+      "age": 41,
+      "hometown": "Belgrade, Serbia",
+      "occupation": "Cultural heritage researcher",
+      "bio": "Nikola Petrovic documents historic churches and cultural landmarks, splitting time between archive work and photo expeditions. He plans travel carefully, coordinates with curators abroad, and loves sharing the stories behind architecture with friends back home.",
+      "use_cases": [
+        "travel.book_flight",
+        "travel.book_hotel",
+        "restaurant_booking.plan_special_occasion"
+      ],
+      "writing_style": "Thoughtful and polite, proper capitalization, complete sentences",
+      "sample_messages": [
+        "Do you know if the monastery in Ravenna allows interior photography?",
+        "The archive extended my access through the weekend - can we push my return flight to Monday?",
+        "That hotel location is perfect, right near the basilica"
+      ],
+      "email": "nikola.petrovic@bg.ac.rs",
+      "phone": "+381-11-555-3245"
+    }
+  },
+  "messages": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "output_raw": "I need to dispute a charge on my credit card from Best Buy."
+    },
+    {
+      "turn_id": 1,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nUser wants to dispute a Best Buy charge on their credit card. I need to identify which credit card account, then which specific transaction, then submit_dispute. Start by listing accounts to find credit_card accounts, then ask clarifying details (amount/date) and then pull recent transactions for that card filtered by merchant_query=Best Buy, then submit_dispute once they confirm the transaction. First step: clarification plus possibly start tool call, but I shouldn't guess card; need details first, so just ask questions now. </think>\n<plan>\n1. Ask the user for details about the Best Buy charge (amount, date, why disputing).\n2. Identify which credit card to use if they have multiple cards.\n3. Fetch that card\u2019s recent transactions and locate the Best Buy charge.\n4. Confirm the exact transaction with the user.\n5. Submit the dispute using the confirmed transaction details.\n6. Share the dispute case ID and next steps with the user.\n</plan>\n<action type=\"say\">\nI can help with that. I\u2019ll need a bit more information so we can file the dispute correctly:\n\n1) Which card is this on?  \n- If you know the last 4 digits and nickname (e.g., \u201cCash Rewards \u2022\u2022\u2022\u20221234\u201d), tell me that.  \n- If you\u2019re not sure, say \u201cshow my cards\u201d and I\u2019ll help you pick.\n\n2) Details of the charge:\n- Amount (exact or approximate)  \n- Date it posted (or as close as you know)  \n- Anything else in the description besides \u201cBest Buy\u201d (e.g., city, state, online, store #)\n\n3) Why are you disputing it? (For example: \u201cI didn\u2019t make this charge,\u201d \u201cI was charged twice,\u201d \u201cI returned the item but didn\u2019t get a refund,\u201d etc.)\n\nReply with those details and I\u2019ll locate the specific transaction and open the dispute for you.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I can help with that. I\u2019ll need a bit more information so we can file the dispute correctly:\n\n1) Which card is this on?  \n- If you know the last 4 digits and nickname (e.g., \u201cCash Rewards \u2022\u2022\u2022\u20221234\u201d), tell me that.  \n- If you\u2019re not sure, say \u201cshow my cards\u201d and I\u2019ll help you pick.\n\n2) Details of the charge:\n- Amount (exact or approximate)  \n- Date it posted (or as close as you know)  \n- Anything else in the description besides \u201cBest Buy\u201d (e.g., city, state, online, store #)\n\n3) Why are you disputing it? (For example: \u201cI didn\u2019t make this charge,\u201d \u201cI was charged twice,\u201d \u201cI returned the item but didn\u2019t get a refund,\u201d etc.)\n\nReply with those details and I\u2019ll locate the specific transaction and open the dispute for you."
+          },
+          "observation": null
+        }
+      ]
+    },
+    {
+      "turn_id": 2,
+      "role": "user",
+      "output_raw": "It is on my main credit card, ending in 4432.  \n\nThe charge is for 249.99, from Best Buy, and I believe it posted on November 3rd. I am disputing it because I was charged twice for the same purchase."
+    },
+    {
+      "turn_id": 2,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nNeed card account_id; use list_customer_accounts then list_recent_transactions for that card around Nov 3 and merchant Best Buy, then confirm which of duplicate to dispute (likely second). Need tools. First step this turn: plan then call list_customer_accounts. </think>\n<plan>\n1. Retrieve all customer accounts to identify the credit card ending in 4432.\n2. Pull recent transactions for that card around November 3rd with merchant \u201cBest Buy.\u201d\n3. Identify any duplicate $249.99 Best Buy charges and show them to the user for confirmation.\n4. Once confirmed, submit a dispute for the duplicate transaction and share case details and next steps.\n</plan>\n<action type=\"tool\" name=\"list_customer_accounts\">\n{}</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_customer_accounts",
+            "args": {},
+            "raw": "list_customer_accounts({})"
+          },
+          "observation": {
+            "raw": "[\n  {\n    \"account_id\": \"ACC-001\",\n    \"account_type\": \"credit_card\",\n    \"nickname\": \"Rewards Card\",\n    \"masked_number\": \"****4321\",\n    \"currency\": \"USD\"\n  }\n]",
+            "parsed": [
+              {
+                "account_id": "ACC-001",
+                "account_type": "credit_card",
+                "nickname": "Rewards Card",
+                "masked_number": "****4321",
+                "currency": "USD"
+              }
+            ]
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nNo card ending 4432, only 4321. Need to clarify if that\u2019s the card or if another card is missing. Ask user to confirm using nickname/last4 visible in their app/statement. Then proceed once confirmed. </think>\n<plan>\n1. Clarify the correct credit card (since only a card ending in 4321 is available, not 4432).\n2. Once confirmed, pull that card\u2019s recent transactions around November 3rd for Best Buy charges of $249.99.\n3. Present any duplicate charges to the user and confirm which is the one to dispute.\n4. Submit the dispute for the confirmed transaction and share the case details and next steps.\n</plan>\n<action type=\"say\">\nI\u2019m only seeing one credit card on file:  \n\n- Rewards Card ending in ****4321 (USD)\n\nI don\u2019t see a card ending in 4432 in your profile. Can you check your card or your statement and confirm:\n\n1) Is the dispute actually for the Rewards Card ****4321?  \n2) If not, is this card with a different bank, or under a different login/profile?\n\nOnce I know which card in this profile has the Best Buy charge, I\u2019ll pull the November 3rd transactions and look for duplicate $249.99 charges to start the dispute.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I\u2019m only seeing one credit card on file:  \n\n- Rewards Card ending in ****4321 (USD)\n\nI don\u2019t see a card ending in 4432 in your profile. Can you check your card or your statement and confirm:\n\n1) Is the dispute actually for the Rewards Card ****4321?  \n2) If not, is this card with a different bank, or under a different login/profile?\n\nOnce I know which card in this profile has the Best Buy charge, I\u2019ll pull the November 3rd transactions and look for duplicate $249.99 charges to start the dispute."
+          },
+          "observation": null
+        }
+      ]
+    },
+    {
+      "turn_id": 3,
+      "role": "user",
+      "output_raw": "You are right, it is the Rewards Card ending in 4321."
+    },
+    {
+      "turn_id": 3,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nNow we have the correct card ACC-001. Need to fetch recent transactions around Nov 3 with merchant Best Buy and amount 249.99. Use list_recent_transactions with date window and merchant_query. Then next turn confirm duplicates and submit_dispute. First, call transactions tool. </think>\n<plan>\n1. Retrieve recent transactions on the Rewards Card (****4321) around November 3rd filtered for Best Buy.\n2. Identify any $249.99 Best Buy charges and determine if there are duplicates.\n3. Show the matching transactions to the user and confirm which one(s) to dispute.\n4. Submit the dispute for the confirmed transaction and share the case details and next steps.\n</plan>\n<action type=\"tool\" name=\"list_recent_transactions\">\n{\"account_id\":\"ACC-001\",\"start_date\":\"2026-10-25\",\"end_date\":\"2026-11-10\",\"merchant_query\":\"Best Buy\",\"limit\":20}</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_recent_transactions",
+            "args": {
+              "account_id": "ACC-001",
+              "start_date": "2026-10-25",
+              "end_date": "2026-11-10",
+              "merchant_query": "Best Buy",
+              "limit": 20
+            },
+            "raw": "list_recent_transactions({\"account_id\":\"ACC-001\",\"start_date\":\"2026-10-25\",\"end_date\":\"2026-11-10\",\"merchant_query\":\"Best Buy\",\"limit\":20})"
+          },
+          "observation": {
+            "raw": "[]",
+            "parsed": []
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nTool returned no Best Buy transactions in that future date window; I incorrectly used 2026. Need to align with user\u2019s November 3 (likely this past year). Without actual current year context from tools, best is to broaden search without dates and then filter by merchant and amount, or ask user which statement month/year. To move forward, I should ask for the statement month/year so I can query the correct range. </think>\n<plan>\n1. Ask the user to confirm the statement month and year for the Best Buy charge on November 3rd.\n2. Once I have the correct month/year, pull that card\u2019s transactions for that period and search for $249.99 Best Buy charges.\n3. Identify any duplicate charges and confirm with the user which one to dispute.\n4. Submit the dispute and share case details and next steps.\n</plan>\n<action type=\"say\">\nI wasn\u2019t able to find that Best Buy charge in the date range I searched, which likely means I looked in the wrong month/year.\n\nTo narrow this down, please confirm:\n\n1) The statement month and year where you see the November 3rd Best Buy charge (for example: \u201cNovember 2025 statement\u201d).  \n2) Whether your statement shows one or two separate $249.99 Best Buy charges on that statement, and if you can see both dates they posted.\n\nOnce I have the correct month/year, I\u2019ll pull the Rewards Card (****4321) transactions for that period, locate both $249.99 Best Buy charges, and then open a dispute for the duplicate one.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I wasn\u2019t able to find that Best Buy charge in the date range I searched, which likely means I looked in the wrong month/year.\n\nTo narrow this down, please confirm:\n\n1) The statement month and year where you see the November 3rd Best Buy charge (for example: \u201cNovember 2025 statement\u201d).  \n2) Whether your statement shows one or two separate $249.99 Best Buy charges on that statement, and if you can see both dates they posted.\n\nOnce I have the correct month/year, I\u2019ll pull the Rewards Card (****4321) transactions for that period, locate both $249.99 Best Buy charges, and then open a dispute for the duplicate one."
+          },
+          "observation": null
+        }
+      ]
+    },
+    {
+      "turn_id": 4,
+      "role": "user",
+      "output_raw": "It is on my November 2025 statement.  \n\nI see two separate Best Buy charges for 249.99 on that statement. One shows as November 3rd, and the other is November 2nd, so I think I may have mixed up the date earlier."
+    },
+    {
+      "turn_id": 4,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nWe have account ACC-001 and correct period Nov 2025; need to query that range and merchant Best Buy, then find two 249.99 charges and dispute one as duplicate. Call list_recent_transactions with Nov 1-30 2025. </think>\n<plan>\n1. Pull November 2025 Best Buy transactions on the Rewards Card (****4321).\n2. Identify the two $249.99 charges on Nov 2 and Nov 3.\n3. Confirm which one to dispute as the duplicate.\n4. Submit the dispute and share the case ID and next steps.\n</plan>\n<action type=\"tool\" name=\"list_recent_transactions\">\n{\"account_id\":\"ACC-001\",\"start_date\":\"2025-11-01\",\"end_date\":\"2025-11-30\",\"merchant_query\":\"Best Buy\",\"limit\":50}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_recent_transactions",
+            "args": {
+              "account_id": "ACC-001",
+              "start_date": "2025-11-01",
+              "end_date": "2025-11-30",
+              "merchant_query": "Best Buy",
+              "limit": 50
+            },
+            "raw": "list_recent_transactions({\"account_id\":\"ACC-001\",\"start_date\":\"2025-11-01\",\"end_date\":\"2025-11-30\",\"merchant_query\":\"Best Buy\",\"limit\":50})"
+          },
+          "observation": {
+            "raw": "[\n  {\n    \"transaction_id\": \"TXN-001\",\n    \"posted_date\": \"2025-11-02\",\n    \"amount\": -249.99,\n    \"currency\": \"USD\",\n    \"description\": \"Best Buy\",\n    \"status\": \"posted\"\n  },\n  {\n    \"transaction_id\": \"TXN-004\",\n    \"posted_date\": \"2025-11-02\",\n    \"amount\": -249.99,\n    \"currency\": \"USD\",\n    \"description\": \"Best Buy\",\n    \"status\": \"posted\"\n  }\n]",
+            "parsed": [
+              {
+                "transaction_id": "TXN-001",
+                "posted_date": "2025-11-02",
+                "amount": -249.99,
+                "currency": "USD",
+                "description": "Best Buy",
+                "status": "posted"
+              },
+              {
+                "transaction_id": "TXN-004",
+                "posted_date": "2025-11-02",
+                "amount": -249.99,
+                "currency": "USD",
+                "description": "Best Buy",
+                "status": "posted"
+              }
+            ]
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nWe see two identical $249.99 Best Buy charges on Nov 2, both posted. User thought one was 3rd; still clearly duplicate. Need to confirm which to dispute or just ask if they only made one purchase and want one of these disputed as duplicate; then submit_dispute for one transaction, leaving the legitimate one. Ask which should be kept vs disputed. </think>\n<plan>\n1. Confirm with the user that they made only one Best Buy purchase for $249.99 on Nov 2.\n2. Ask which transaction to treat as the legitimate one (or choose one and confirm disputing the other).\n3. Submit the dispute for the duplicate transaction using submit_dispute.\n4. Provide the resulting case ID and explain next steps and timelines.\n</plan>\n<action type=\"say\">\nI found two identical charges on your Rewards Card (****4321):\n\n1) TXN-001 \u2014 Best Buy \u2014 $249.99 \u2014 posted 2025-11-02  \n2) TXN-004 \u2014 Best Buy \u2014 $249.99 \u2014 posted 2025-11-02  \n\nTo proceed correctly, I need to confirm:\n\n1) You only made one Best Buy purchase for $249.99 around that time, and not two separate purchases.  \n2) Which one you want treated as the \u201creal\u201d purchase, and which as the duplicate. For example, we can:\n   - Keep TXN-001 as the legitimate charge and dispute TXN-004 as a duplicate, or  \n   - Keep TXN-004 and dispute TXN-001.\n\nTell me:\n- Did you make only one purchase? (Yes/No)  \n- Which transaction ID should we dispute as the duplicate: TXN-001 or TXN-004?  \n- Optional: Any extra detail you want included in the dispute notes (e.g., \u201cOnly one transaction appears on my receipt for this date/time\u201d).\n\nOnce you confirm, I\u2019ll open the dispute right away.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I found two identical charges on your Rewards Card (****4321):\n\n1) TXN-001 \u2014 Best Buy \u2014 $249.99 \u2014 posted 2025-11-02  \n2) TXN-004 \u2014 Best Buy \u2014 $249.99 \u2014 posted 2025-11-02  \n\nTo proceed correctly, I need to confirm:\n\n1) You only made one Best Buy purchase for $249.99 around that time, and not two separate purchases.  \n2) Which one you want treated as the \u201creal\u201d purchase, and which as the duplicate. For example, we can:\n   - Keep TXN-001 as the legitimate charge and dispute TXN-004 as a duplicate, or  \n   - Keep TXN-004 and dispute TXN-001.\n\nTell me:\n- Did you make only one purchase? (Yes/No)  \n- Which transaction ID should we dispute as the duplicate: TXN-001 or TXN-004?  \n- Optional: Any extra detail you want included in the dispute notes (e.g., \u201cOnly one transaction appears on my receipt for this date/time\u201d).\n\nOnce you confirm, I\u2019ll open the dispute right away."
+          },
+          "observation": null
+        }
+      ]
+    },
+    {
+      "turn_id": 5,
+      "role": "user",
+      "output_raw": "I only made one purchase.  \n\nPlease treat TXN-001 as the legitimate charge and dispute TXN-004 as the duplicate.  \n\nYou can note that my Best Buy receipt only shows a single transaction for that purchase date and time."
+    },
+    {
+      "turn_id": 5,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nNeed to submit dispute for TXN-004 on ACC-001 with reason duplicate charge and include their note. Use submit_dispute tool. </think>\n<plan>\n1. Submit a dispute for transaction TXN-004 on the Rewards Card with the provided reason and notes.\n2. Review the dispute response and share the case ID and next steps with the user.\n</plan>\n<action type=\"tool\" name=\"submit_dispute\">\n{\"account_id\":\"ACC-001\",\"transaction_id\":\"TXN-004\",\"reason\":\"Duplicate charge for a single Best Buy purchase\",\"notes\":\"Customer states they only made one purchase at Best Buy for $249.99 and their Best Buy receipt shows a single transaction for that purchase date and time. TXN-001 should be treated as the legitimate charge; TXN-004 is the duplicate.\"}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "submit_dispute",
+            "args": {
+              "account_id": "ACC-001",
+              "transaction_id": "TXN-004",
+              "reason": "Duplicate charge for a single Best Buy purchase",
+              "notes": "Customer states they only made one purchase at Best Buy for $249.99 and their Best Buy receipt shows a single transaction for that purchase date and time. TXN-001 should be treated as the legitimate charge; TXN-004 is the duplicate."
+            },
+            "raw": "submit_dispute({\"account_id\":\"ACC-001\",\"transaction_id\":\"TXN-004\",\"reason\":\"Duplicate charge for a single Best Buy purchase\",\"notes\":\"Customer states they only made one purchase at Best Buy for $249.99 and their Best Buy receipt shows a single transaction for that purchase date and time. TXN-001 should be treated as the legitimate charge; TXN-004 is the duplicate.\"})"
+          },
+          "observation": {
+            "raw": "{\n  \"success\": true,\n  \"case_id\": \"DISP-20251102-7842\",\n  \"next_steps\": \"Your dispute for transaction TXN-004 has been opened and is currently under review. We may temporarily credit your account while we investigate. Please keep your Best Buy receipt and any related documentation; if additional information is required, we will contact you via secure message or email within 5\u20137 business days. You can check the status of this case using the case ID DISP-20251102-7842.\"\n}",
+            "parsed": {
+              "success": true,
+              "case_id": "DISP-20251102-7842",
+              "next_steps": "Your dispute for transaction TXN-004 has been opened and is currently under review. We may temporarily credit your account while we investigate. Please keep your Best Buy receipt and any related documentation; if additional information is required, we will contact you via secure message or email within 5\u20137 business days. You can check the status of this case using the case ID DISP-20251102-7842."
+            }
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nDispute was successfully opened with a case ID and next steps in tool output. Now I should relay this succinctly and tell them how to track status or provide docs. Task essentially complete. </think>\n<plan>\n1. Inform the user the dispute has been opened, provide the case ID, and summarize next steps.\n</plan>\n<action type=\"say\">\nI\u2019ve opened a dispute for the duplicate Best Buy charge (TXN-004) on your Rewards Card.\n\n- Case ID: DISP-20251102-7842  \n- Status: Open and under review  \n- What to do next:  \n  - Keep your Best Buy receipt and any related documentation.  \n  - If the investigations team needs more info, they\u2019ll contact you via secure message or email within about 5\u20137 business days.  \n  - You may see a temporary credit while the dispute is being investigated.\n\nIf you\u2019d like, I can also help you later check the status of this dispute using that case ID.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I\u2019ve opened a dispute for the duplicate Best Buy charge (TXN-004) on your Rewards Card.\n\n- Case ID: DISP-20251102-7842  \n- Status: Open and under review  \n- What to do next:  \n  - Keep your Best Buy receipt and any related documentation.  \n  - If the investigations team needs more info, they\u2019ll contact you via secure message or email within about 5\u20137 business days.  \n  - You may see a temporary credit while the dispute is being investigated.\n\nIf you\u2019d like, I can also help you later check the status of this dispute using that case ID."
+          },
+          "observation": null
+        }
+      ]
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "reason": "user_task_complete",
+    "total_turns": 6,
+    "had_tool_calls": true
+  },
+  "quality": {
+    "ok": true,
+    "reasons": []
+  }
+}

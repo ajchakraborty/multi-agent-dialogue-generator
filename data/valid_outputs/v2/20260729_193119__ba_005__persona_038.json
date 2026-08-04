@@ -1,0 +1,200 @@
+{
+  "meta": {
+    "conversation_id": "ba_005",
+    "domain_id": null,
+    "toolset_id": null,
+    "model": "gpt-5.1",
+    "prompt_versions": {
+      "system_agent": "v3",
+      "user_agent": "v1",
+      "tool_agent": "v1"
+    },
+    "seed": null,
+    "simulator_version": "0.1.0"
+  },
+  "config": {
+    "scenario_name": "ba_005",
+    "task": {
+      "slots": {
+        "constraints": {
+          "target_account": "checking"
+        },
+        "preferences": {}
+      },
+      "success_criteria": {
+        "target_selector": {
+          "account_type": "checking"
+        },
+        "action": "get_account_balance",
+        "notes": "Success if the assistant retrieves the balance for the checking account using get_account_balance and tells the user the balance."
+      },
+      "objective": "Check bank account balance"
+    },
+    "user_agent_config": {
+      "injected_behaviors": []
+    },
+    "tool_agent_config": {
+      "injected_behaviors": [
+        {
+          "type_id": "tool.timeout",
+          "instructions": "The first list_customer_accounts call experiences a transient timeout. Subsequent retry should succeed."
+        }
+      ],
+      "context": {
+        "seed": {
+          "accounts": [
+            {
+              "account_id": "ACC-001",
+              "account_type": "checking",
+              "nickname": "Everyday Checking",
+              "masked_number": "****1234",
+              "currency": "USD"
+            },
+            {
+              "account_id": "ACC-002",
+              "account_type": "savings",
+              "nickname": "Emergency Fund",
+              "masked_number": "****5678",
+              "currency": "USD"
+            }
+          ],
+          "balances": [
+            {
+              "account_id": "ACC-001",
+              "current_balance": 1650.8,
+              "available_balance": 1600.8,
+              "currency": "USD",
+              "last_updated": "2025-11-21T14:32:10Z"
+            },
+            {
+              "account_id": "ACC-002",
+              "current_balance": 12000.0,
+              "available_balance": 12000.0,
+              "currency": "USD",
+              "last_updated": "2025-11-21T14:32:10Z"
+            }
+          ]
+        }
+      }
+    },
+    "persona": {
+      "id": "persona_038",
+      "name": "Prof. Andrea Morrison",
+      "age": 56,
+      "hometown": "Birmingham, AL",
+      "occupation": "Law professor",
+      "bio": "Andrea Morrison teaches criminal law and legal ethics at the University of Alabama School of Law. She's written extensively about race in the justice system and uses classic cases like To Kill a Mockingbird to teach students about bias in trials. She also supervises the school's innocence project clinic.",
+      "use_cases": [],
+      "sample_messages": [
+        "Innocence project case review Monday 4pm - need the conference room with the big screen for evidence photos",
+        "Guest speaker for my crim law class? Looking for a defense attorney who's handled jury bias issues",
+        "Conference panel in Atlanta next month - need flight Friday morning, returning Sunday evening"
+      ],
+      "email": "andrea.morrison@law.ua.edu",
+      "phone": "(205) 555-8264"
+    }
+  },
+  "messages": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "output_raw": "need to see how much is in my checking account right now"
+    },
+    {
+      "turn_id": 1,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nUser wants checking balance. Need accounts, then identify checking, then get balance. Use tools. Ask nothing yet. Call list_customer_accounts first. Then will call get_account_balance in next turn. </think>\n<plan>\n1. Retrieve the list of your accounts.\n2. Identify your checking account from that list.\n3. Fetch and present the current/available balance for that checking account.\n</plan>\n<action type=\"tool\" name=\"list_customer_accounts\">\n{}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_customer_accounts",
+            "args": {},
+            "raw": "list_customer_accounts({})"
+          },
+          "observation": {
+            "raw": "{\n  \"error\": {\n    \"code\": \"TIMEOUT\",\n    \"message\": \"The request to list customer accounts timed out. Please retry your request.\",\n    \"retry_after_seconds\": 2\n  }\n}",
+            "parsed": {
+              "error": {
+                "code": "TIMEOUT",
+                "message": "The request to list customer accounts timed out. Please retry your request.",
+                "retry_after_seconds": 2
+              }
+            }
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nThe tool call to list_customer_accounts timed out, so I don\u2019t have the accounts yet. The error says I can just retry after a short delay. I should transparently retry the same tool, then proceed to find the checking account and get its balance. </think>\n<plan>\n1. Retry retrieving the list of your accounts.\n2. Identify your checking account in that list.\n3. Fetch and show the current and available balance for that checking account.\n</plan>\n<action type=\"tool\" name=\"list_customer_accounts\">\n{}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_customer_accounts",
+            "args": {},
+            "raw": "list_customer_accounts({})"
+          },
+          "observation": {
+            "raw": "[\n  {\n    \"account_id\": \"ACC-001\",\n    \"account_type\": \"checking\",\n    \"nickname\": \"Everyday Checking\",\n    \"masked_number\": \"****1234\",\n    \"currency\": \"USD\"\n  },\n  {\n    \"account_id\": \"ACC-002\",\n    \"account_type\": \"savings\",\n    \"nickname\": \"Emergency Fund\",\n    \"masked_number\": \"****5678\",\n    \"currency\": \"USD\"\n  }\n]",
+            "parsed": [
+              {
+                "account_id": "ACC-001",
+                "account_type": "checking",
+                "nickname": "Everyday Checking",
+                "masked_number": "****1234",
+                "currency": "USD"
+              },
+              {
+                "account_id": "ACC-002",
+                "account_type": "savings",
+                "nickname": "Emergency Fund",
+                "masked_number": "****5678",
+                "currency": "USD"
+              }
+            ]
+          }
+        },
+        {
+          "step_index": 3,
+          "output_raw": "<think>\nNow I have the accounts and see a checking account ACC-001. I need to get its balance with get_account_balance. Then I'll report current/available balance to the user. </think>\n<plan>\n1. Fetch the current and available balance for the checking account ACC-001.\n2. Present the checking account balance to the user clearly.\n</plan>\n<action type=\"tool\" name=\"get_account_balance\">\n{\"account_id\":\"ACC-001\"}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "get_account_balance",
+            "args": {
+              "account_id": "ACC-001"
+            },
+            "raw": "get_account_balance({\"account_id\":\"ACC-001\"})"
+          },
+          "observation": {
+            "raw": "{\n  \"account_id\": \"ACC-001\",\n  \"current_balance\": 1650.8,\n  \"available_balance\": 1600.8,\n  \"currency\": \"USD\",\n  \"last_updated\": \"2025-11-21T14:32:10Z\"\n}",
+            "parsed": {
+              "account_id": "ACC-001",
+              "current_balance": 1650.8,
+              "available_balance": 1600.8,
+              "currency": "USD",
+              "last_updated": "2025-11-21T14:32:10Z"
+            }
+          }
+        },
+        {
+          "step_index": 4,
+          "output_raw": "<think>\nI have the checking account balance details from the tool. Now I just need to present the key numbers (current and available) succinctly. </think>\n<plan>\n1. Share the current and available balances for the user\u2019s checking account.\n</plan>\n<action type=\"say\">\nYou currently have:\n\n- Current balance: $1,650.80 USD  \n- Available balance: $1,600.80 USD  \n\n(From account: Everyday Checking \u2022 ****1234, last updated 2025-11-21T14:32:10Z.)</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "You currently have:\n\n- Current balance: $1,650.80 USD  \n- Available balance: $1,600.80 USD  \n\n(From account: Everyday Checking \u2022 ****1234, last updated 2025-11-21T14:32:10Z.)"
+          },
+          "observation": null
+        }
+      ]
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "reason": "user_task_complete",
+    "total_turns": 2,
+    "had_tool_calls": true
+  },
+  "quality": {
+    "ok": true,
+    "reasons": []
+  }
+}

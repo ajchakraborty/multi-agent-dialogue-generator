@@ -1,0 +1,198 @@
+{
+  "meta": {
+    "conversation_id": "ba_rc_010",
+    "domain_id": null,
+    "toolset_id": null,
+    "model": "gpt-5.1",
+    "prompt_versions": {
+      "system_agent": "v3",
+      "user_agent": "v1",
+      "tool_agent": "v1"
+    },
+    "seed": null,
+    "simulator_version": "0.1.0"
+  },
+  "config": {
+    "scenario_name": "ba_rc_010",
+    "task": {
+      "slots": {
+        "constraints": {
+          "target_card": "credit_card",
+          "issue_type": "stolen"
+        },
+        "preferences": {
+          "request_replacement": true
+        }
+      },
+      "success_criteria": {
+        "target_selector": {
+          "account_type": "credit_card",
+          "masked_number": "****6666"
+        },
+        "action": "report_card_issue",
+        "notes": "Success if the assistant reports the stolen card via report_card_issue for the credit card ending in 6666, requests a replacement and tells the user the card has been reported."
+      },
+      "objective": "Report a stolen credit card"
+    },
+    "user_agent_config": {
+      "injected_behaviors": []
+    },
+    "tool_agent_config": {
+      "injected_behaviors": [],
+      "context": {
+        "seed": {
+          "accounts": [
+            {
+              "account_id": "ACC-001",
+              "account_type": "credit_card",
+              "nickname": "Personal Card",
+              "masked_number": "****6666",
+              "currency": "USD"
+            },
+            {
+              "account_id": "ACC-002",
+              "account_type": "credit_card",
+              "nickname": "Travel Card",
+              "masked_number": "****7777",
+              "currency": "USD"
+            },
+            {
+              "account_id": "ACC-003",
+              "account_type": "checking",
+              "nickname": "Main Checking",
+              "masked_number": "****8888",
+              "currency": "USD"
+            }
+          ]
+        }
+      }
+    },
+    "persona": {
+      "id": "persona_034",
+      "name": "Marcus Lee",
+      "age": 42,
+      "hometown": "Chicago, IL",
+      "occupation": "Trial consultant",
+      "bio": "Marcus Lee helps lawyers prepare for trials by conducting mock juries, analyzing jury selection, and advising on courtroom strategy. He has a psychology background and finds the group dynamics of deliberation fascinating. He works on 2-3 cases at a time and travels to different courthouses around the Midwest.",
+      "use_cases": [],
+      "sample_messages": [
+        "Mock jury session for the Patterson case scheduled for next Tuesday. Need 12 participants recruited by Friday.",
+        "Travel to Milwaukee next week for jury selection - need rental car and hotel near the courthouse, 3 nights",
+        "Reviewing voir dire transcripts tonight. Can you pull the juror questionnaires and send them over?"
+      ],
+      "email": "marcus.lee@midwesttrialconsulting.com",
+      "phone": "(312) 555-9274"
+    }
+  },
+  "messages": [
+    {
+      "turn_id": 1,
+      "role": "user",
+      "output_raw": "Need to report a stolen credit card and get a replacement issued."
+    },
+    {
+      "turn_id": 1,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nUser wants to report a stolen credit card and get a replacement. I must use report_card_issue but need a card_id, which I can obtain by listing their accounts and then asking which card. First step: clarify which specific credit card, likely after showing their credit card accounts. I\u2019ll call list_customer_accounts, then ask the user to choose a card if more than one. </think>\n<plan>\n1. Retrieve the list of the user's accounts to identify available credit cards.\n2. Ask the user which specific credit card (by nickname/last 4) was stolen.\n3. Call the tool to report that card as stolen and request a replacement.\n4. Confirm the block and replacement details to the user.\n</plan>\n<action type=\"tool\" name=\"list_customer_accounts\">\n{}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "list_customer_accounts",
+            "args": {},
+            "raw": "list_customer_accounts({})"
+          },
+          "observation": {
+            "raw": "[\n  {\n    \"account_id\": \"ACC-001\",\n    \"account_type\": \"credit_card\",\n    \"nickname\": \"Personal Card\",\n    \"masked_number\": \"****6666\",\n    \"currency\": \"USD\"\n  },\n  {\n    \"account_id\": \"ACC-002\",\n    \"account_type\": \"credit_card\",\n    \"nickname\": \"Travel Card\",\n    \"masked_number\": \"****7777\",\n    \"currency\": \"USD\"\n  },\n  {\n    \"account_id\": \"ACC-003\",\n    \"account_type\": \"checking\",\n    \"nickname\": \"Main Checking\",\n    \"masked_number\": \"****8888\",\n    \"currency\": \"USD\"\n  }\n]",
+            "parsed": [
+              {
+                "account_id": "ACC-001",
+                "account_type": "credit_card",
+                "nickname": "Personal Card",
+                "masked_number": "****6666",
+                "currency": "USD"
+              },
+              {
+                "account_id": "ACC-002",
+                "account_type": "credit_card",
+                "nickname": "Travel Card",
+                "masked_number": "****7777",
+                "currency": "USD"
+              },
+              {
+                "account_id": "ACC-003",
+                "account_type": "checking",
+                "nickname": "Main Checking",
+                "masked_number": "****8888",
+                "currency": "USD"
+              }
+            ]
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nI now know the user has two credit cards; I need to know which one is stolen and then call report_card_issue with that account/card ID, issue_type \"stolen\", and request_replacement true. I should present clear options (nickname + last 4) and ask the user to choose, and optionally capture any notes (e.g., when they noticed it missing, suspicious transactions). Once they choose, next turn I\u2019ll call the tool. </think>\n<plan>\n1. Ask the user which specific credit card (Personal ****6666 or Travel ****7777) was stolen and if they want to add any notes.\n2. After they confirm, call report_card_issue to block the card and request a replacement.\n3. Share confirmation and replacement details with the user.\n</plan>\n<action type=\"say\">\nI can take care of that.\n\nYou have these credit cards on file:\n- Personal Card ending in 6666\n- Travel Card ending in 7777\n\nWhich one was stolen? Also, do you want to include any notes for the bank (for example, when you last had the card or any suspicious transactions you noticed), or should I just submit it as \u201ccard stolen, please block immediately and issue a replacement\u201d?</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "I can take care of that.\n\nYou have these credit cards on file:\n- Personal Card ending in 6666\n- Travel Card ending in 7777\n\nWhich one was stolen? Also, do you want to include any notes for the bank (for example, when you last had the card or any suspicious transactions you noticed), or should I just submit it as \u201ccard stolen, please block immediately and issue a replacement\u201d?"
+          },
+          "observation": null
+        }
+      ]
+    },
+    {
+      "turn_id": 2,
+      "role": "user",
+      "output_raw": "It\u2019s the personal card ending in 6666.  \n\nSubmit it as \u201ccard stolen, please block immediately and issue a replacement.\u201d"
+    },
+    {
+      "turn_id": 2,
+      "role": "assistant",
+      "steps": [
+        {
+          "step_index": 1,
+          "output_raw": "<think>\nUser chose Personal Card ****6666 and gave exact notes. I should now call report_card_issue with card_id ACC-001, issue_type stolen, notes as provided, and request_replacement true. Then I\u2019ll relay the outcome and any replacement details. </think>\n<plan>\n1. Submit a stolen-card report for the Personal Card (****6666), requesting an immediate block and replacement.\n2. Review the tool response for confirmation, replacement card ID, and delivery estimate.\n3. Communicate the results and any next steps to the user.\n</plan>\n<action type=\"tool\" name=\"report_card_issue\">\n{ \n  \"card_id\": \"ACC-001\",\n  \"issue_type\": \"stolen\",\n  \"notes\": \"card stolen, please block immediately and issue a replacement.\",\n  \"request_replacement\": true\n}\n</action>",
+          "action_structured": {
+            "type": "tool_call",
+            "name": "report_card_issue",
+            "args": {
+              "card_id": "ACC-001",
+              "issue_type": "stolen",
+              "notes": "card stolen, please block immediately and issue a replacement.",
+              "request_replacement": true
+            },
+            "raw": "report_card_issue({\"card_id\":\"ACC-001\",\"issue_type\":\"stolen\",\"notes\":\"card stolen, please block immediately and issue a replacement.\",\"request_replacement\":true})"
+          },
+          "observation": {
+            "raw": "{\n  \"success\": true,\n  \"replacement_card_id\": \"ACC-001-R1\",\n  \"estimated_arrival\": \"2026-08-02T00:00:00Z\"\n}",
+            "parsed": {
+              "success": true,
+              "replacement_card_id": "ACC-001-R1",
+              "estimated_arrival": "2026-08-02T00:00:00Z"
+            }
+          }
+        },
+        {
+          "step_index": 2,
+          "output_raw": "<think>\nTool call succeeded: card blocked and replacement ordered with ID and ETA. I should confirm clearly, mention arrival date in plain terms, and briefly suggest monitoring transactions/using digital card if relevant, but keep it concise. Task basically complete. </think>\n<plan>\n1. Confirm that the stolen card has been blocked and a replacement is on the way, including estimated arrival and any brief next steps.\n</plan>\n<action type=\"say\">\nYour Personal Card ending in 6666 has been blocked, and a replacement has been ordered.\n\nDetails:\n- Replacement card ID: ACC-001-R1  \n- Estimated arrival: around 2026-08-02\n\nIf you see any transactions on that card you don\u2019t recognize, tell me and I can help you start a dispute on those specific charges.</action>",
+          "action_structured": {
+            "type": "say",
+            "text": "Your Personal Card ending in 6666 has been blocked, and a replacement has been ordered.\n\nDetails:\n- Replacement card ID: ACC-001-R1  \n- Estimated arrival: around 2026-08-02\n\nIf you see any transactions on that card you don\u2019t recognize, tell me and I can help you start a dispute on those specific charges."
+          },
+          "observation": null
+        }
+      ]
+    }
+  ],
+  "outcome": {
+    "success": true,
+    "reason": "user_task_complete",
+    "total_turns": 3,
+    "had_tool_calls": true
+  },
+  "quality": {
+    "ok": true,
+    "reasons": []
+  }
+}
