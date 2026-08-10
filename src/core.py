@@ -6,6 +6,76 @@ import os
 import random
 import sys
 
+try:
+    # So standalone entry points (e.g. `python -m eval.run`) pick up credentials
+    # from .env too, not just simulate.py. Never overrides the real environment,
+    # so `eval "$(sfproxy env)"` still wins.
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
+# ---------------------------------------------------------------------------
+# sfproxy routing
+#
+# All OpenAI traffic (3 sim agents + 3 LLM judges) goes through the sfproxy
+# Cortex gateway rather than api.openai.com. Token comes from `sfproxy env`;
+# run `eval "$(sfproxy env)"` before generating, or put SNOWFLAKE_PAT in .env.
+# ---------------------------------------------------------------------------
+
+SFPROXY_BASE_URL = os.getenv(
+    "SFPROXY_BASE_URL", "https://sfproxy.us.cloud.uniphore.com/v1"
+)
+
+# Cortex namespaces OpenAI models. Keeps `--model gpt-5.1` working unchanged
+# in every existing command, script and doc.
+MODEL_ALIASES = {
+    "gpt-4.1": "openai-gpt-4.1",
+    "gpt-5": "openai-gpt-5",
+    "gpt-5-chat": "openai-gpt-5-chat",
+    "gpt-5-mini": "openai-gpt-5-mini",
+    "gpt-5-nano": "openai-gpt-5-nano",
+    "gpt-5.1": "openai-gpt-5.1",
+    "gpt-5.2": "openai-gpt-5.2",
+    "gpt-5.4": "openai-gpt-5.4",
+}
+
+
+def resolve_model(model: str) -> str:
+    """Map a bare OpenAI model name to its Cortex name. Idempotent."""
+    return MODEL_ALIASES.get(model, model)
+
+
+def _sfproxy_user() -> str:
+    """Identity for X-Sfproxy-User. Omitting it is a 403 identity_required."""
+    user = os.getenv("SFPROXY_USER")
+    if user:
+        return user.strip()
+
+    # `sfproxy env` exports this as "X-Sfproxy-User: a@b.com|X-Sfproxy-Version: ..."
+    raw = os.getenv("ANTHROPIC_CUSTOM_HEADERS", "")
+    for header in raw.split("|"):
+        name, _, value = header.partition(":")
+        if name.strip().lower() == "x-sfproxy-user" and value.strip():
+            return value.strip()
+
+    raise RuntimeError(
+        "sfproxy identity not found. Run: eval \"$(sfproxy env)\"  "
+        "(or set SFPROXY_USER=you@uniphore.com)"
+    )
+
+
+def _sfproxy_token(explicit: Optional[str] = None) -> str:
+    token = explicit or os.getenv("SNOWFLAKE_PAT") or os.getenv("SNOWFLAKE_CORTEX_TOKEN")
+    if not token:
+        raise RuntimeError(
+            "SNOWFLAKE_PAT not set. Run: eval \"$(sfproxy env)\"  "
+            "(tokens expire; re-run it if a job starts returning 401)"
+        )
+    return token
+
+
 class MessageRole(Enum):
     USER = "user"
     ASSISTANT = "assistant"
@@ -345,17 +415,19 @@ class HuggingFaceLLMClient:
 
 class LLMClient:
     def __init__(self, model: str, api_key: str = None, **kwargs):
-        self.model = model
-        # Handle both old and new OpenAI client formats
-        try:
-            self.client = openai.OpenAI(
-                api_key=api_key or os.getenv('OPENAI_API_KEY'),
-                **kwargs
-            )
-        except AttributeError:
-            # Fallback to old format
-            openai.api_key = api_key or os.getenv('OPENAI_API_KEY')
-            self.client = openai
+        # Keep the name the caller asked for (used for the reasoning-effort gate
+        # and for log lines); send the Cortex-namespaced name to the API.
+        self.requested_model = model
+        self.model = resolve_model(model)
+
+        # api_key is accepted for signature compatibility with existing callers
+        # (they pass OPENAI_API_KEY) but is ignored: auth is the sfproxy PAT.
+        self.client = openai.OpenAI(
+            api_key=_sfproxy_token(),
+            base_url=SFPROXY_BASE_URL,
+            default_headers={"X-Sfproxy-User": _sfproxy_user()},
+            **kwargs
+        )
         
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """Make API call and return raw response content
@@ -419,12 +491,18 @@ class LLMClient:
         if instructions:
             api_params["instructions"] = instructions
 
-        if self.model == "gpt-5.1":
-            api_params["reasoning"] = {"effort": "none"}
+        # Gate on the requested name so this keeps firing after the Cortex
+        # rename (self.model is now "openai-gpt-5.1", not "gpt-5.1").
+        if self.requested_model in ("gpt-5.1", "openai-gpt-5.1"):
+            # Effort is the prime suspect for the low eval pass rate; override
+            # with MADS_REASONING_EFFORT=medium to A/B it without a code edit.
+            api_params["reasoning"] = {
+                "effort": os.getenv("MADS_REASONING_EFFORT", "none")
+            }
             api_params["text"] = {"verbosity": "low"}
-        
+
         # Remove 'temperature' from api_params if model is gpt-5-mini
-        if self.model == "gpt-5-mini":
+        if self.requested_model in ("gpt-5-mini", "openai-gpt-5-mini"):
             if "temperature" in api_params:
                 del api_params["temperature"]
         
@@ -481,6 +559,11 @@ class LLMClient:
         except (AttributeError, Exception) as e:
             # Fallback to old chat completions API if responses API not available or fails
             # This allows graceful degradation if Responses API is not yet available
+            print(
+                f"[OpenAI] Responses API failed ({type(e).__name__}: {str(e)[:200]}); "
+                f"retrying via chat.completions",
+                file=sys.stderr, flush=True,
+            )
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,

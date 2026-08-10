@@ -21,7 +21,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--api-key",
         dest="api_key",
-        help="OpenAI API key (default: use OPENAI_API_KEY environment variable)",
+        help="Ignored: auth uses the sfproxy PAT (SNOWFLAKE_PAT)",
     )
     args = parser.parse_args(argv)
 

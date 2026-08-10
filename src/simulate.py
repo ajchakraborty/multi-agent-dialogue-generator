@@ -77,7 +77,7 @@ def parse_arguments(args_list: Optional[List[str]] = None) -> argparse.Namespace
     parser.add_argument('--model', default='gpt-5.1', help='LLM model to use for system agent (assistant)')
     parser.add_argument('--user-model', help='LLM model to use for user agent (defaults to --model if not specified)')
     parser.add_argument('--max-turns', type=int, default=20, help='Maximum conversation turns')
-    parser.add_argument('--api-key', help='OpenAI API key (default: OPENAI_API_KEY env var)')
+    parser.add_argument('--api-key', help='Ignored: auth uses the sfproxy PAT (SNOWFLAKE_PAT)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose console output')
     parser.add_argument('--system-prompts-dir', help='Path to system prompts directory (default: prompts)')
     parser.add_argument('--system-agent-prompt', help='Path to system agent prompt file')
@@ -970,12 +970,12 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
         logger = logging.getLogger(__name__)
         # Reduced verbosity - initialization messages only logged to file, not console
         
-        # Initialize Auxiliary LLM client (OpenAI) - Always required for User/Tool agents
-        api_key = args.api_key or os.getenv('OPENAI_API_KEY')
+        # Initialize Auxiliary LLM client (sfproxy) - Always required for User/Tool agents
+        api_key = args.api_key or os.getenv('SNOWFLAKE_PAT') or os.getenv('SNOWFLAKE_CORTEX_TOKEN')
         if not api_key:
-            logger.error("OpenAI API key required")
-            print("Error: OpenAI API key required. Set OPENAI_API_KEY environment variable or use --api-key", file=sys.stderr)
-            result_info["error"] = "OpenAI API key required"
+            logger.error("sfproxy PAT required")
+            print('Error: sfproxy PAT required. Run: eval "$(sfproxy env)"', file=sys.stderr)
+            result_info["error"] = "sfproxy PAT required"
             return result_info
             
         # Use --user-model if specified, otherwise use --model
@@ -1135,8 +1135,14 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
 
         # Print final outputs: conversation.json path and eval command
         repo_root = Path(__file__).resolve().parent.parent
-        conversation_path = Path(conversation_file)
-        relative_path = conversation_path.relative_to(repo_root)
+        # Resolve first: a relative outputs root (--outputs-root / MADG_OUTPUT_ROOT)
+        # used to raise ValueError here, which aborted the run *before* --run-eval
+        # below — producing a transcript with no eval.json and no gate applied.
+        conversation_path = Path(conversation_file).resolve()
+        try:
+            relative_path = conversation_path.relative_to(repo_root)
+        except ValueError:
+            relative_path = conversation_path
         
         print(f"\nConversation file: {relative_path}", file=sys.stderr)
 

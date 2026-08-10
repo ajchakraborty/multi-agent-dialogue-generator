@@ -56,7 +56,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--api-key",
         dest="api_key",
-        help="OpenAI API key for success judge (default: use OPENAI_API_KEY env variable).",
+        help="Ignored: auth uses the sfproxy PAT (SNOWFLAKE_PAT).",
     )
     parser.add_argument(
         "--faithfulness-model",

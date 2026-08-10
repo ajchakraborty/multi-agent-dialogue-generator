@@ -14,6 +14,19 @@ mkdir -p logs
 LOG="logs/${TAG}.log"
 JOBS="logs/${TAG}_jobs.txt"
 
+# Refresh the sfproxy PAT once up front and export it so the xargs children
+# inherit it. Tokens are a snapshot: a run longer than the token lifetime will
+# start logging 401s, so re-run this script (or `eval "$(sfproxy env)"`) if that
+# shows up in the log.
+if command -v sfproxy >/dev/null 2>&1; then
+  eval "$(sfproxy env 2>/dev/null)" || true
+fi
+export SNOWFLAKE_PAT ANTHROPIC_CUSTOM_HEADERS
+if [ -z "${SNOWFLAKE_PAT:-}" ]; then
+  echo 'error: SNOWFLAKE_PAT not set and sfproxy env failed. Run: eval "$(sfproxy env)"' >&2
+  exit 1
+fi
+
 count_valid() {
   uv run src/distribution.py --report 2>/dev/null \
     | grep -E "^${DOMAIN}[[:space:]]+${PTYPE}[[:space:]]" \
