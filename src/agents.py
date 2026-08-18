@@ -113,11 +113,6 @@ class UserAgent(BaseAgent):
         messages = []
         ua = context.agent_config or {}
         guidance = ua.get('correction_guidance')
-        if guidance:
-            system_content += (
-                "\n\nCRITICAL — LESSONS FROM A PREVIOUS FAILED ATTEMPT (follow strictly):\n"
-                + "\n".join(f"- {g}" for g in guidance)
-            )
         task = ua.get('task', {}) if isinstance(ua.get('task'), dict) else {}
         objective = ua.get('objective') or task.get('objective', '') or task.get('description', '')
         persona_note = ua.get('user_persona', '')
@@ -210,6 +205,11 @@ class UserAgent(BaseAgent):
             parts.append(f"\nInjected behaviors: {json.dumps(behaviors_summary, ensure_ascii=False)}")
         
         system_content = ''.join(parts)
+        if guidance:
+            system_content += (
+                "\n\nCRITICAL — LESSONS FROM A PREVIOUS FAILED ATTEMPT (follow strictly):\n"
+                + "\n".join(f"- {g}" for g in guidance)
+            )
         messages.append({"role": "system", "content": system_content})
 
         # Add role boundary reminder before assistant messages to prevent role confusion
