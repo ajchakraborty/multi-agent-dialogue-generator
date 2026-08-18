@@ -92,6 +92,8 @@ def parse_arguments(args_list: Optional[List[str]] = None) -> argparse.Namespace
     parser.add_argument('--outputs-root', help='Root directory for outputs (default: env MADG_OUTPUT_ROOT or data/outputs)')
     parser.add_argument('--persona-id', help='Persona ID to use when scenario defines personas')
     parser.add_argument('--run-eval', action='store_true', help='Automatically run evaluation after conversation completes')
+    parser.add_argument('--correction-hints', help='Path to correction_hints.json for scenario (used for regeneration with feedback)')
+    parser.add_argument('--valid-outputs-version', default='v2', help='Subfolder of data/valid_outputs to copy passing runs into (default: v2)')
     parser.add_argument('--eval-model', default='gpt-5.1', help='Model to use for evaluation (default: gpt-5.1)')
     parser.add_argument('--skip-faithfulness', action='store_true', help='Skip faithfulness evaluation when running --run-eval')
     parser.add_argument('--skip-role-confusion', action='store_true', help='Skip role confusion evaluation when running --run-eval')
@@ -772,13 +774,14 @@ def write_conversation_log(result: ConversationResult, output_dir: Path) -> str:
 def _copy_to_valid_outputs(
     output_dir: Path,
     conversation_filename: str,
-    repo_root: Path
+    repo_root: Path,
+    valid_outputs_version: str="v2"
 ) -> Optional[Path]:
     """Copy successful simulation conversation file to valid_outputs directory (flat structure).
     Returns destination file path."""
     # Determine valid_outputs root
-    valid_outputs_root = repo_root / "data" / "valid_outputs" / "v2"
-    
+    valid_outputs_root = repo_root / "data" / "valid_outputs" / valid_outputs_version
+
     # Flat structure: just copy the conversation file with same name
     src_file = output_dir / conversation_filename
     if not src_file.exists():
@@ -959,6 +962,10 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
             scenario,
             args.persona_id,
         )
+        
+        correction_hints = None
+        if getattr(args, 'correction_hints', None):
+            correction_hints = json.loads(Path(args.correction_hints).read_text())
 
         # Set up logging/paths (persona-aware)
         output_file, log_file, agent_flow_file, run_dir, run_id, timestamp, scenario_id, persona_str = setup_logging(
@@ -1033,6 +1040,7 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
                     args.max_turns,
                     persona=persona_context,
                     task_override=task_override,
+                    correction_hints=correction_hints,
                     verbose=args.verbose,
                 )
                 result = runner.run_conversation()
@@ -1047,6 +1055,7 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
                 args.max_turns,
                 persona=persona_context,
                 task_override=task_override,
+                correction_hints=correction_hints,
                 verbose=args.verbose,
             )
             result = runner.run_conversation()
@@ -1190,10 +1199,11 @@ def run_simulation(example_path: str, args: argparse.Namespace, system_llm_clien
                                 dest_file = _copy_to_valid_outputs(
                                     output_dir=run_dir,
                                     conversation_filename=conversation_filename,
-                                    repo_root=repo_root
+                                    repo_root=repo_root,
+                                    valid_outputs_version=args.valid_outputs_version
                                 )
                                 if dest_file:
-                                    valid_outputs_root = repo_root / "data" / "valid_outputs" / "v2"
+                                    valid_outputs_root = repo_root / "data" / "valid_outputs" / args.valid_outputs_version
                                     copied_to_valid = dest_file.relative_to(valid_outputs_root)
                             except Exception as e:
                                 logger.warning(f"Failed to copy to valid_outputs: {e}")

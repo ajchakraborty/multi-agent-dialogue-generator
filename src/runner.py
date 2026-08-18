@@ -34,6 +34,7 @@ class ConversationRunner:
                  persona: Optional[Dict[str, Any]] = None,
                  task_override: Optional[Dict[str, Any]] = None,
                  system_greeting: Optional[str] = DEFAULT_SYSTEM_GREETING,
+                 correction_hints: Optional[Dict[str, Any]] = None,
                  verbose: bool = False):
         self.scenario = scenario
         self.system_agent = system_agent
@@ -42,6 +43,7 @@ class ConversationRunner:
         self.max_turns = max_turns
         self.persona = persona
         self.task_context = task_override or scenario.task
+        self.correction_hints = correction_hints or {}
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
         # Three separate conversation histories
@@ -64,6 +66,11 @@ class ConversationRunner:
         
         # Cache tool registry for validation
         self._tool_registry_cache: Optional[ToolRegistry] = None
+        self.retry_stats: Dict[str, int] = {
+            "steps_retried": 0,
+            "steps_fixed": 0,
+            "steps_still_invalid": 0
+        }
     
     def _build_tool_registry(self) -> ToolRegistry:
         """Build ToolRegistry from scenario.tools, caching the result."""
@@ -116,6 +123,34 @@ class ConversationRunner:
         
         return is_valid, all_errors
     
+    ERROR_HINTS = {
+        "turn_first_step_missing_plan": "Your response must contain a <plan>...</plan> block BEFORE the <action> block. Do not put the plan inside <think>.",
+        "structure_missing_block": "You must output a <plan> block followed by exactly one <action> block.",
+        "structure_invalid_block_format": "Exact format required: <plan>...</plan> then <action type=\"tool\" name=\"...\">{json args}</action> OR <action type=\"say\">text</action>.",
+        "structure_unexpected_text": "Do not write ANY text outside the <think>/<plan>/<action> blocks.",
+        "turn_structure_invalid_say": "User-facing text must be inside <action type=\"say\">...</action>, never as free prose.",
+        "syntax_illegal_action_type": "The action type must be exactly \"tool\" or \"say\".",
+    }
+
+    def _build_retry_context(self, original_context: ConversationContext, bad_response: str, errors: List[str],) -> ConversationContext:
+
+        feedback = Message(MessageRole.USER,
+            "FORMAT VALIDATOR: Your previous response was REJECTED and was NOT shown to the user.\n"
+            "Errors:\n"
+            + "\n".join(f"- {e}: {self.ERROR_HINTS.get(e, e)}" for e in errors)
+            + "\n\nRegenerate your response for the SAME step. Structure it exactly as: "
+            "<think>...</think> then <plan>...</plan> then exactly one <action> block, "
+            "with nothing outside these blocks.",
+            metadata={"validator_feedback": True},
+            )
+        
+        return ConversationContext(
+            messages=list(original_context.messages)
+            + [Message(MessageRole.ASSISTANT, bad_response), feedback],
+            agent_config=original_context.agent_config,
+            turn_number=original_context.turn_number,
+        ) 
+    
     def _format_turn_summary(self, turn_id: int, user_text: str, system_steps: List[Dict[str, Any]]) -> str:
         """Format a one-line summary of a turn for progress logging."""
         # Truncate user text to fit on one line
@@ -163,6 +198,7 @@ class ConversationRunner:
                         "total_turns": turn + 1,
                         "scenario": self.scenario.name,
                         "had_tool_calls": had_tool_calls,
+                        "retry_stats": dict(self.retry_stats),
                         "persona_id": self.persona.get('id') if self.persona else None
                     },
                     success=success,
@@ -239,6 +275,114 @@ class ConversationRunner:
         self.system_history.append(user_message)
         return user_message
         
+    # def process_system_turn(self, turn_number: int) -> Tuple[Message, bool]:
+    #     had_tool_call = False
+    #     # Accumulators for this system turn
+    #     pre_turn_user_history = [
+    #         { 'role': msg.role.value, 'content': msg.content }
+    #         for msg in self.user_history
+    #     ]
+    #     system_messages_raw: List[str] = []
+    #     actions_structured: List[Dict[str, Any]] = []
+    #     tool_results: List[str] = []
+    #     steps: List[Dict[str, Any]] = []
+    #     turn_id = turn_number + 1
+    #     while True:
+    #         # Build context and get assistant output for the current micro-step
+    #         system_context = self.build_system_context(turn_number)
+            
+    #         # Retry loop disabled - single attempt with syntax check logging only
+    #         system_response = self.system_agent.generate_response(system_context)
+    #         self.logger.info(f"system_agent response: {system_response}\n")
+            
+    #         # Log syntax errors for debugging, but do not retry
+    #         is_valid, errors = self._validate_assistant_response(
+    #             system_response,
+    #             turn_id,
+    #             len(steps),
+    #             (len(steps) == 0)
+    #         )
+            
+    #         if not is_valid:
+    #             error_names = ", ".join(errors) if errors else "unknown_error"
+    #             self.logger.warning(
+    #                 f"Syntax error(s) detected (ignoring): {error_names}, turn {turn_id}.{len(steps) + 1}"
+    #             )
+            
+    #         system_messages_raw.append(system_response)
+    #         if self.has_tool_call(system_response):
+    #             had_tool_call = True
+    #             self.system_history.append(
+    #                 Message(MessageRole.ASSISTANT, system_response, metadata={
+    #                     'turn_id': turn_id,
+    #                     'micro_step_index': len(steps)
+    #                 })
+    #             )
+    #             # Record the tool call line in actions_structured
+    #             tool_call_only = self.extract_tool_call(system_response)
+    #             if tool_call_only:
+    #                 actions_structured.append({ 'type': 'tool_call', 'raw': tool_call_only })
+    #             tool_result = self.process_tool_call(system_response, turn_number)
+    #             self.system_history.append(
+    #                 Message(MessageRole.TOOL, tool_result, metadata={
+    #                     'turn_id': turn_id,
+    #                     'micro_step_index': len(steps)
+    #                 })
+    #             )
+    #             tool_results.append(tool_result)
+    #             # Normalize tool call for structured action (best-effort)
+    #             action_name, action_args = self._normalize_tool_call(tool_call_only)
+    #             # Append structured step (tool)
+    #             steps.append({
+    #                 'step_index': len(steps) + 1,
+    #                 'output_raw': system_response,
+    #                 'action_structured': {
+    #                     'type': 'tool_call',
+    #                     **({ 'name': action_name } if action_name else {}),
+    #                     **({ 'args': action_args } if action_args is not None else {}),
+    #                     'raw': tool_call_only
+    #                 },
+    #                 'observation': self._build_observation(tool_result)
+    #             })
+    #             continue
+    #         else:
+    #             user_facing_message = self.system_agent.get_user_facing_message(system_response)
+    #             system_message = Message(MessageRole.ASSISTANT, user_facing_message, metadata={'turn_id': turn_id})
+    #             full_system_message = Message(
+    #                 MessageRole.ASSISTANT,
+    #                 system_response,
+    #                 metadata={
+    #                     'turn_id': turn_id,
+    #                     'micro_step_index': len(steps)
+    #                 }
+    #             )
+    #             self.user_history.append(system_message)
+    #             self.system_history.append(full_system_message)
+    #             # Record final say action
+    #             actions_structured.append({ 'type': 'say', 'text': user_facing_message })
+    #             # Append structured step (say)
+    #             steps.append({
+    #                 'step_index': len(steps) + 1,
+    #                 'output_raw': system_response,
+    #                 'action_structured': { 'type': 'say', 'text': user_facing_message },
+    #                 'observation': None
+    #             })
+    #             # Build turn trace for export (new minimal schema)
+    #             last_user_text = self.user_history[-2].content if len(self.user_history) >= 2 else ''
+    #             turn_trace: Dict[str, Any] = {
+    #                 'turn_id': turn_id,
+    #                 'user': last_user_text,
+    #                 'assistant': {
+    #                     'steps': steps
+    #                 },
+    #                 'termination': {
+    #                     'final_in_conversation': ('[DONE_SUCCESS]' in user_facing_message) or ('[DONE_FAILURE]' in user_facing_message)
+    #                 }
+    #             }
+    #             self.turn_traces.append(turn_trace)
+    #         return system_message, had_tool_call
+
+    # ...existing code...
     def process_system_turn(self, turn_number: int) -> Tuple[Message, bool]:
         had_tool_call = False
         # Accumulators for this system turn
@@ -254,25 +398,43 @@ class ConversationRunner:
         while True:
             # Build context and get assistant output for the current micro-step
             system_context = self.build_system_context(turn_number)
-            
-            # Retry loop disabled - single attempt with syntax check logging only
-            system_response = self.system_agent.generate_response(system_context)
-            self.logger.info(f"system_agent response: {system_response}\n")
-            
-            # Log syntax errors for debugging, but do not retry
-            is_valid, errors = self._validate_assistant_response(
-                system_response,
-                turn_id,
-                len(steps),
-                (len(steps) == 0)
-            )
-            
-            if not is_valid:
-                error_names = ", ".join(errors) if errors else "unknown_error"
-                self.logger.warning(
-                    f"Syntax error(s) detected (ignoring): {error_names}, turn {turn_id}.{len(steps) + 1}"
+
+            # In-loop syntax retry: up to 2 extra attempts with error feedback
+            max_syntax_retries = 2
+            system_response = ""
+            is_valid, errors = False, []
+            for attempt in range(max_syntax_retries + 1):
+                if attempt == 0:
+                    system_response = self.system_agent.generate_response(system_context)
+                else:
+                    retry_context = self._build_retry_context(system_context, system_response, errors)
+                    system_response = self.system_agent.generate_response(retry_context)
+                self.logger.info(f"system_agent response: {system_response}\n")
+
+                is_valid, errors = self._validate_assistant_response(
+                    system_response,
+                    turn_id,
+                    len(steps),
+                    (len(steps) == 0)
                 )
-            
+                if is_valid:
+                    if attempt > 0:
+                        self.retry_stats["steps_fixed"] += 1
+                    break
+
+                self.retry_stats["steps_retried"] += 1
+                self.logger.warning(
+                    f"Syntax error(s) attempt {attempt + 1}/{max_syntax_retries + 1}: "
+                    f"{', '.join(errors)}, turn {turn_id}.{len(steps) + 1}"
+                )
+
+            if not is_valid:
+                self.retry_stats["steps_still_invalid"] += 1
+                self.logger.warning(
+                    f"Proceeding with invalid response after {max_syntax_retries + 1} attempts, "
+                    f"turn {turn_id}.{len(steps) + 1}"
+                )
+
             system_messages_raw.append(system_response)
             if self.has_tool_call(system_response):
                 had_tool_call = True
@@ -345,6 +507,7 @@ class ConversationRunner:
                 }
                 self.turn_traces.append(turn_trace)
             return system_message, had_tool_call
+# ...existing code...
         
     def process_tool_call(self, system_response: str, turn_number: int) -> str:
         tool_context = self.build_tool_context(system_response, turn_number)
@@ -379,6 +542,9 @@ class ConversationRunner:
                 ua.setdefault('objective', task_desc)
         if self.persona:
             ua['persona'] = deepcopy(self.persona)
+
+        if self.correction_hints.get('user_hints'):
+            ua['correction_guidance'] = self.correction_hints['user_hints']
         return ConversationContext(
             messages=self.user_history,
             agent_config=ua,
@@ -386,9 +552,13 @@ class ConversationRunner:
         )
         
     def build_system_context(self, turn_number: int) -> ConversationContext:
+        agent_config: Dict[str, Any] = {"tools": self.scenario.tools}
+        
+        if self.correction_hints.get('system_hints'):
+            agent_config['correction_guidance'] = self.correction_hints['system_hints']
         return ConversationContext(
             messages=self.system_history,
-            agent_config={"tools": self.scenario.tools},
+            agent_config=agent_config,
             turn_number=turn_number
         )
         

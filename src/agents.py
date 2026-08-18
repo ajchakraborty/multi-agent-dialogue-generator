@@ -66,6 +66,12 @@ class SystemAgent(BaseAgent):
     def build_prompt(self, context: ConversationContext) -> List[Dict[str, str]]:
         messages = []
         system_content = f"{self.system_prompt}\n\nAvailable Tools:\n{json.dumps(context.agent_config.get('tools', {}), indent=2)}"
+        guidance = (context.agent_config or {}).get('correction_guidance')
+        if guidance:
+            system_content += (
+                "\n\nCRITICAL — LESSONS FROM A PREVIOUS FAILED ATTEMPT (follow strictly):\n"
+                + "\n".join(f"- {g}" for g in guidance)
+            )
         messages.append({"role": "system", "content": system_content})
         self._add_conversation_history(messages, context)
         return messages
@@ -106,6 +112,12 @@ class UserAgent(BaseAgent):
     def build_prompt(self, context: ConversationContext) -> List[Dict[str, str]]:
         messages = []
         ua = context.agent_config or {}
+        guidance = ua.get('correction_guidance')
+        if guidance:
+            system_content += (
+                "\n\nCRITICAL — LESSONS FROM A PREVIOUS FAILED ATTEMPT (follow strictly):\n"
+                + "\n".join(f"- {g}" for g in guidance)
+            )
         task = ua.get('task', {}) if isinstance(ua.get('task'), dict) else {}
         objective = ua.get('objective') or task.get('objective', '') or task.get('description', '')
         persona_note = ua.get('user_persona', '')
